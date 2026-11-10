@@ -69,6 +69,12 @@ NOSTDINC_FLAGS:= \
 	-include backport/backport.h \
 	-DBUILD_OPENWRT
 
+# cfg80211 comes from the mac80211 (backports) package and is newer than the kernel, so tell the
+# driver which wireless API version it is built against (patch 040). Encoded like KERNEL_VERSION().
+MAC80211_MAKEFILE:=$(firstword $(wildcard $(TOPDIR)/package/kernel/mac80211/Makefile $(TOPDIR)/package/feeds/*/mac80211/Makefile))
+MAC80211_VER:=$(if $(MAC80211_MAKEFILE),$(shell sed -n 's/^PKG_VERSION:=\([0-9]*\)\.\([0-9]*\).*/\1 \2/p' $(MAC80211_MAKEFILE)))
+WIRELESS_VERSION_CODE:=$(if $(word 2,$(MAC80211_VER)),$(shell echo $$(( $(word 1,$(MAC80211_VER)) * 65536 + $(word 2,$(MAC80211_VER)) * 256 ))),LINUX_VERSION_CODE)
+
 # CFG80211_HDR: the driver Makefile probes cfg80211.h for API changes. OpenWrt's
 # cfg80211 comes from backports, so point it at that header, not the kernel's.
 define Build/Compile
@@ -76,6 +82,7 @@ define Build/Compile
 		M="$(PKG_BUILD_DIR)/drivers/aic8800" \
 		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
 		CFG80211_HDR="$(STAGING_DIR)/usr/include/mac80211/net/cfg80211.h" \
+		AIC_WIRELESS_VERSION_CODE="$(WIRELESS_VERSION_CODE)" \
 		modules
 endef
 

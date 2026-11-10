@@ -1,0 +1,167 @@
+diff --git a/drivers/aic8800/aic8800_fdrv/Makefile b/drivers/aic8800/aic8800_fdrv/Makefile
+index e757664..06b1ac2 100644
+--- a/drivers/aic8800/aic8800_fdrv/Makefile
++++ b/drivers/aic8800/aic8800_fdrv/Makefile
+@@ -294,6 +294,11 @@ ccflags-$(CONFIG_PREALLOC_RX_SKB) += -DCONFIG_PREALLOC_RX_SKB
+ ccflags-$(CONFIG_PREALLOC_TXQ) += -DCONFIG_PREALLOC_TXQ
+ ccflags-$(CONFIG_USE_WIRELESS_EXT) += -DCONFIG_USE_WIRELESS_EXT
+ 
++# Version of the cfg80211 API the driver is built against. It differs from the
++# kernel version when cfg80211 comes from backports (e.g. OpenWrt).
++AIC_WIRELESS_VERSION_CODE ?= LINUX_VERSION_CODE
++ccflags-y += -DAIC_WIRELESS_VERSION_CODE=$(AIC_WIRELESS_VERSION_CODE)
++
+ CFG80211_HDR := $(srctree)/include/net/cfg80211.h
+ ifneq ($(wildcard $(CFG80211_HDR)),)
+ ifneq ($(shell grep -A1 '(\*set_monitor_channel)' $(CFG80211_HDR) | grep -c 'struct net_device'),0)
+diff --git a/drivers/aic8800/aic8800_fdrv/rwnx_defs.h b/drivers/aic8800/aic8800_fdrv/rwnx_defs.h
+index f781a6c..4d23c07 100644
+--- a/drivers/aic8800/aic8800_fdrv/rwnx_defs.h
++++ b/drivers/aic8800/aic8800_fdrv/rwnx_defs.h
+@@ -391,7 +391,7 @@ struct rwnx_vif {
+ 	u8_l key_has_add;
+ 	u8_l is_p2p_vif;
+ 	struct apm_probe_sta sta_probe;
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+ 	struct wiphy_work csa_work;
+ #else
+ 	struct work_struct csa_work;
+diff --git a/drivers/aic8800/aic8800_fdrv/rwnx_main.c b/drivers/aic8800/aic8800_fdrv/rwnx_main.c
+index 0c0e53a..1bcf22a 100644
+--- a/drivers/aic8800/aic8800_fdrv/rwnx_main.c
++++ b/drivers/aic8800/aic8800_fdrv/rwnx_main.c
+@@ -1008,7 +1008,7 @@ static void rwnx_del_csa(struct rwnx_vif *vif)
+     kfree(csa);
+ }
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+ static void rwnx_csa_finish(struct wiphy *wiphy, struct wiphy_work *ws)
+ #else
+ static void rwnx_csa_finish(struct work_struct *ws)
+@@ -1023,7 +1023,7 @@ static void rwnx_csa_finish(struct work_struct *ws)
+ 
+ 	RWNX_DBG(RWNX_FN_ENTRY_STR);
+ 
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
+     mutex_lock(&vif->wdev.mtx);
+ #endif
+     spin_lock_bh(&rwnx_hw->cb_lock);
+@@ -1083,7 +1083,7 @@ static void rwnx_csa_finish(struct work_struct *ws)
+         } else
+             rwnx_txq_vif_stop(vif, RWNX_TXQ_STOP_CHAN, rwnx_hw);
+         spin_unlock_bh(&rwnx_hw->cb_lock);
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
++#if (AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
+ 		        cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0);
+ #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+                 cfg80211_ch_switch_notify(vif->ndev, &csa->chandef, 0, 0);
+@@ -1095,7 +1095,7 @@ static void rwnx_csa_finish(struct work_struct *ws)
+     }
+     rwnx_del_csa(vif);
+ out:
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
+     mutex_unlock(&vif->wdev.mtx);
+ #endif
+     return;
+@@ -1363,7 +1363,7 @@ static int rwnx_close(struct net_device *dev)
+ 
+     RWNX_DBG(RWNX_FN_ENTRY_STR);
+ 
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(3, 16, 0) && AIC_WIRELESS_VERSION_CODE < KERNEL_VERSION(6, 7, 0)
+     cancel_work_sync(&rwnx_vif->csa_work);
+ #endif
+ 
+@@ -2798,7 +2798,7 @@ static struct rwnx_vif *rwnx_interface_add(struct rwnx_hw *rwnx_hw,
+     vif->ch_index = RWNX_CH_NOT_SET;
+     memset(&vif->net_stats, 0, sizeof(vif->net_stats));
+     vif->is_p2p_vif = 0;
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+     wiphy_work_init(&vif->csa_work, rwnx_csa_finish);
+ #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0)
+     INIT_WORK(&vif->csa_work, rwnx_csa_finish);
+@@ -4704,7 +4704,7 @@ static int rwnx_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
+  * @change_beacon: Change the beacon parameters for an access point mode
+  *	interface. This should reject the call when AP mode wasn't started.
+  */
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
++#if (AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
+ static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
+ 									   struct cfg80211_ap_update *params)
+ #else
+@@ -4724,7 +4724,7 @@ static int rwnx_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *d
+ 	elem.dma_addr = 0;
+ 
+     // Build the beacon
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
++#if (AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
+ 	buf = rwnx_build_bcn(bcn, &params->beacon);
+ #else
+     buf = rwnx_build_bcn(bcn, info);
+@@ -4798,7 +4798,7 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
+     rwnx_txq_vif_deinit(rwnx_hw, rwnx_vif);
+     rwnx_del_bcn(&rwnx_vif->ap.bcn);
+     rwnx_del_csa(rwnx_vif);
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+     wiphy_work_cancel(wiphy, &rwnx_vif->csa_work);
+ #endif
+ 
+@@ -5565,7 +5565,7 @@ int rwnx_cfg80211_start_radar_detection(struct wiphy *wiphy,
+                                     #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 15, 0))
+                                         , u32 cac_time_ms
+                                     #endif
+-									#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
++									#if (AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+ 										, int link_id
+                                     #endif
+                                         )
+@@ -5719,7 +5719,7 @@ static int rwnx_cfg80211_channel_switch(struct wiphy *wiphy,
+         rwnx_del_csa(vif);
+         goto end;
+     } else {
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
++#if (AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 9, 0))
+ 		cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, false);        
+ #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+         cfg80211_ch_switch_started_notify(dev, &csa->chandef, 0, params->count, params->block_tx, params->punct_bitmap);
+diff --git a/drivers/aic8800/aic8800_fdrv/rwnx_msg_rx.c b/drivers/aic8800/aic8800_fdrv/rwnx_msg_rx.c
+index 419020b..f955a47 100644
+--- a/drivers/aic8800/aic8800_fdrv/rwnx_msg_rx.c
++++ b/drivers/aic8800/aic8800_fdrv/rwnx_msg_rx.c
+@@ -468,7 +468,7 @@ static inline int rwnx_rx_csa_finish_ind(struct rwnx_hw *rwnx_hw,
+             if (vif->ap.csa) {
+                 vif->ap.csa->status = ind->status;
+                 vif->ap.csa->ch_idx = ind->chan_idx;
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++#if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+                 wiphy_work_queue(rwnx_hw->wiphy, &vif->csa_work);
+ #else
+                 schedule_work(&vif->csa_work);
+diff --git a/drivers/aic8800/aic8800_fdrv/rwnx_radar.c b/drivers/aic8800/aic8800_fdrv/rwnx_radar.c
+index 45a72bf..2e149cf 100644
+--- a/drivers/aic8800/aic8800_fdrv/rwnx_radar.c
++++ b/drivers/aic8800/aic8800_fdrv/rwnx_radar.c
+@@ -1399,7 +1399,7 @@ static void rwnx_radar_cac_work(struct work_struct *ws)
+                     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+                        &ctxt->chan_def,
+                     #endif
+-                    #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
++                    #if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+ 					   NL80211_RADAR_CAC_FINISHED, GFP_KERNEL, 0);
+ 					#else
+                        NL80211_RADAR_CAC_FINISHED, GFP_KERNEL);
+@@ -1503,7 +1503,7 @@ void rwnx_radar_cancel_cac(struct rwnx_radar *radar)
+                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+                            &ctxt->chan_def,
+                         #endif
+-                        #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
++                        #if AIC_WIRELESS_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+ 						   NL80211_RADAR_CAC_ABORTED, GFP_KERNEL, 0);
+ 						#else
+                            NL80211_RADAR_CAC_ABORTED, GFP_KERNEL);

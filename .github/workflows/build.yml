@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 env:
-  DEFAULT_TARGETS: "x86-64 mediatek-filogic ramips-mt7621 ath79-generic bcm27xx-bcm2711 rockchip-armv8"
+  DEFAULT_TARGETS: "x86-64 mediatek-filogic ramips-mt7621 bcm27xx-bcm2711 rockchip-armv8"
 
 jobs:
   plan:

@@ -22,6 +22,10 @@ Tested on one setup: **TP-Link AX300 (`3625:0110`), x86-64, OpenWrt 25.12.6**.
 - Known gaps: TX power shows as 0 dBm; in AP mode the clients' signal shows as 0 dBm.
 - Not tested: other adapters, other targets (CI only checks that they build), mesh, P2P, monitor
   mode, WPA3, long-term stability.
+- **OpenWrt 24.10 packages are build-tested only.** They compile, but nobody has loaded them on a
+  router yet. Reports welcome.
+- Big-endian targets (e.g. `ath79`) are not built: the vendor driver has never been checked for
+  endianness. You can try with `./build-sdk.sh ath79-generic-v<release>`.
 
 ## Install from a release
 
@@ -83,7 +87,11 @@ If the chip stops answering after a failed firmware start, only unplugging it he
 - `030` makes `dump_station` work in client and AP mode, which LuCI needs for signal, bitrate and
   the station list.
 
-All three are submitted upstream
+- `040` lets the build say which cfg80211 version it targets (`AIC_WIRELESS_VERSION_CODE`), for
+  the API changes between 6.7 and 6.12. Needed on OpenWrt 24.10 (kernel 6.6, cfg80211 6.12).
+- `050` raises the stack-frame warning limit for one debugfs function so 32-bit MIPS targets build.
+
+The first three are submitted upstream
 ([#48](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/48),
 [#49](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/49),
 [#50](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/50)) and will be dropped here once merged.

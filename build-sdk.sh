@@ -12,9 +12,9 @@ chmod 0777 "$OUT"   # the SDK container writes as uid 1000
 docker run --rm -e JOBS="$(nproc)" -v "$HERE/aic8800dc:/src/aic8800dc:ro" -v "$OUT:/out" "openwrt/sdk:$TAG" bash -euc '
 	cd /builder
 	# Only the base feed is needed (mac80211 for the cfg80211 backport headers, usbmode), at the commit the SDK was built from.
-	rev=$(sed -n "s/^src-git --root=package base .*\^\([0-9a-f]*\)$/\1/p" feeds.conf.default)
-	[ -n "$rev" ] || { echo "no base feed commit in feeds.conf.default"; exit 1; }
-	echo "src-git --root=package base https://github.com/openwrt/openwrt.git^$rev" > feeds.conf
+	base=$(grep -E "^src-git(-full)?( --root=package)? base " feeds.conf.default | head -1)
+	[ -n "$base" ] || { echo "no base feed in feeds.conf.default"; exit 1; }
+	echo "$base" | sed "s#https://git.openwrt.org/openwrt/openwrt.git#https://github.com/openwrt/openwrt.git#" > feeds.conf
 	./scripts/feeds update base >/dev/null
 	./scripts/feeds install kmod-cfg80211 usb-modeswitch >/dev/null
 	cp -r /src/aic8800dc package/

@@ -1,0 +1,12 @@
+diff --git a/drivers/aic8800/aic8800_fdrv/Makefile b/drivers/aic8800/aic8800_fdrv/Makefile
+index 06b1ac2..275e5c2 100644
+--- a/drivers/aic8800/aic8800_fdrv/Makefile
++++ b/drivers/aic8800/aic8800_fdrv/Makefile
+@@ -405,3 +405,7 @@ uninstall:
+ clean:
+ 	rm -rf *.o *.ko *.o.* *.mod.* modules.* Module.* .a* .o* .*.o.* *.mod .tmp* .cache.mk .modules.order.cmd .Module.symvers.cmd
+ 
++
++# rwnx_dbgfs_acsinfo_read() keeps ~1.9 KiB on the stack; 32-bit targets (MIPS) build with
++# -Werror=frame-larger-than=1024. It only runs for a debugfs read, so raise the limit for this file.
++CFLAGS_rwnx_debugfs.o += -Wframe-larger-than=2048
