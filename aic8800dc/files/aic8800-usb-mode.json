@@ -1,0 +1,55 @@
+{
+	"messages": [],
+	"devices": {
+		"a69c:5721": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5722": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5723": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5724": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5725": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5726": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:5727": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:572a": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:572c": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		},
+		"a69c:572f": {
+			"*": {
+				"mode": "StandardEject"
+			}
+		}
+	}
+}

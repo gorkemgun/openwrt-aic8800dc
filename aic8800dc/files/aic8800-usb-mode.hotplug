@@ -1,0 +1,34 @@
+#!/bin/sh
+# AIC8800 USB Wi-Fi sticks first enumerate as a driver CD (a69c:5721-5727/572a/572c/572f, usb-storage).
+# A SCSI eject makes them re-enumerate in Wi-Fi mode (e.g. TP-Link AX300 -> 3625:0110).
+#
+# If usbmode talks to the device before usb-storage has finished its SCSI scan, the mass-storage
+# protocol gets out of sync and the endpoints stall ("Failed to send switch message"). So: wait for
+# the scan to settle, and if the switch did not happen, reconfigure the device (authorized 0/1 issues
+# a new SET_CONFIGURATION, which clears the stall) and try again.
+[ "$ACTION" = add ] && [ "$DEVTYPE" = usb_device ] || exit 0
+case "$PRODUCT" in
+a69c/572[1-7]/*|a69c/572[acf]/*) ;;
+*) exit 0 ;;
+esac
+
+dev="/sys$DEVPATH"
+still_storage() {
+	case "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" in
+	a69c:572[1-7]|a69c:572[acf]) return 0 ;;
+	esac
+	return 1
+}
+
+(
+	sleep 5
+	for try in 1 2 3; do
+		still_storage || exit 0
+		logger -t aic8800 "$DEVICENAME: in storage mode, switching to Wi-Fi mode (try $try)"
+		usbmode -s -c /usr/share/aic8800/usb-mode.json 2>&1 | logger -t aic8800
+		sleep 4
+		still_storage || { logger -t aic8800 "$DEVICENAME: switched to Wi-Fi mode"; exit 0; }
+		echo 0 > "$dev/authorized"; sleep 1; echo 1 > "$dev/authorized"; sleep 6
+	done
+	still_storage && logger -t aic8800 "$DEVICENAME: could not switch to Wi-Fi mode; replug the adapter"
+) </dev/null >/dev/null 2>&1 &

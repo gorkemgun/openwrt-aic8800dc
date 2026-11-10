@@ -1,0 +1,130 @@
+name: build
+
+# Builds the packages with the official OpenWrt SDK for each (OpenWrt release, target) pair and
+# publishes them as the GitHub release "openwrt-<release>".
+#  - daily: picks up new stable / old-stable OpenWrt releases that have no GitHub release yet
+#  - push to main touching the package: rebuilds the current stable / old-stable releases
+#  - manual: any release and target list
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  push:
+    branches: [main]
+    paths: ["aic8800dc/**", "build-sdk.sh", ".github/workflows/build.yml"]
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "OpenWrt releases, space separated (empty = current stable + old stable)"
+        type: string
+        required: false
+      targets:
+        description: "SDK targets, space separated (empty = default list)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  DEFAULT_TARGETS: "x86-64 mediatek-filogic ramips-mt7621 ath79-generic bcm27xx-bcm2711 rockchip-armv8"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      versions: ${{ steps.m.outputs.versions }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      IN_VERSIONS: ${{ inputs.versions }}
+      IN_TARGETS: ${{ inputs.targets }}
+    steps:
+      - id: m
+        run: |
+          V="$IN_VERSIONS"; T="${IN_TARGETS:-$DEFAULT_TARGETS}"
+          if [ -z "$V" ]; then
+            V=$(curl -fsSL https://downloads.openwrt.org/.versions.json | jq -r '[.stable_version, .oldstable_version] | map(select(. != null and . != "")) | join(" ")')
+          fi
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            # scheduled runs only build releases we have not published yet
+            N=""
+            for v in $V; do gh release view "openwrt-$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || N="$N $v"; done
+            V="$N"
+          fi
+          echo "versions: $V | targets: $T"
+          M=$(jq -cn --arg v "$V" --arg t "$T" '{include: [($v | split(" ") | map(select(. != "")))[] as $ver | ($t | split(" ") | map(select(. != "")))[] as $tgt | {version: $ver, target: $tgt}]}')
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "versions=$(echo $V)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.versions != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    name: ${{ matrix.version }} ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: sh build-sdk.sh "${{ matrix.target }}-v${{ matrix.version }}" out
+      - name: Build log (on failure)
+        if: failure()
+        run: tail -60 out/build.log || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkgs-${{ matrix.version }}-${{ matrix.target }}
+          path: |
+            out/*.apk
+            out/*.ipk
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [plan, build]
+    if: always() && needs.plan.outputs.versions != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSIONS: ${{ needs.plan.outputs.versions }}
+      MATRIX: ${{ needs.plan.outputs.matrix }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+        continue-on-error: true
+      - name: Release
+        run: |
+          mkdir -p art
+          for v in $VERSIONS; do
+            rm -rf assets; mkdir assets
+            OK=""; BAD=""
+            for t in $(jq -r --arg v "$v" '.include[] | select(.version == $v) | .target' <<<"$MATRIX"); do
+              d="art/pkgs-$v-$t"
+              if ls "$d"/* >/dev/null 2>&1; then
+                for f in "$d"/*; do cp "$f" "assets/$t-$(basename "$f" | tr '~' '.')"; done
+                OK="$OK $t"
+              else
+                BAD="$BAD $t"
+              fi
+            done
+            [ -n "$OK" ] || { echo "::warning::no target built for OpenWrt $v"; continue; }
+            {
+              echo "Packages for **OpenWrt $v**, built with the official SDK from commit \`${GITHUB_SHA:0:8}\`."
+              echo
+              echo "Targets:$(for t in $OK; do printf ' `%s`' "$t"; done)"
+              [ -z "$BAD" ] || echo "Build failed (no packages):$(for t in $BAD; do printf ' `%s`' "$t"; done)"
+              echo
+              echo "Download the three \`<target>-*\` files for your target and install them on the router; see the README."
+              echo "Only \`x86-64\` is tested on hardware; the other targets are build-tested only."
+            } > notes.md
+            if gh release view "openwrt-$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "openwrt-$v" assets/* --clobber -R "$GITHUB_REPOSITORY"
+              gh release edit "openwrt-$v" --notes-file notes.md -R "$GITHUB_REPOSITORY"
+            else
+              gh release create "openwrt-$v" assets/* --title "OpenWrt $v" --notes-file notes.md --target "$GITHUB_SHA" -R "$GITHUB_REPOSITORY"
+            fi
+          done
