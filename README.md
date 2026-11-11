@@ -19,7 +19,8 @@ Tested on one setup: **TP-Link AX300 (`3625:0110`), x86-64, OpenWrt 25.12.6**.
 
 - Works: client mode (WPA2, HE), AP mode (WPA2), AP and client at the same time on the one radio,
   automatic mode switch at boot and on hotplug, signal / bitrate / station list in LuCI.
-- Known gaps: TX power shows as 0 dBm; in AP mode the clients' signal shows as 0 dBm.
+- Known gaps: TX power shows as 0 dBm. With `wds` on the AP, a 4addr client associates and shows up
+  as a station, but no traffic passed over the link in my one attempt.
 - Not tested: other adapters, other targets (CI only checks that they build), mesh, P2P, monitor
   mode, WPA3, long-term stability.
 - **OpenWrt 24.10 packages are build-tested only.** They compile, but nobody has loaded them on a
@@ -80,21 +81,13 @@ If the chip stops answering after a failed firmware start, only unplugging it he
 
 ## Patches
 
-- `010` detects the cfg80211 6.17 function signatures from the backports header instead of the
-  kernel version (OpenWrt pairs an older kernel with a newer cfg80211).
-- `020` fixes a deadlock when an interface is added through nl80211, which OpenWrt does on every
-  `wifi up`.
-- `030` makes `dump_station` work in client and AP mode, which LuCI needs for signal, bitrate and
-  the station list.
-
 - `040` lets the build say which cfg80211 version it targets (`AIC_WIRELESS_VERSION_CODE`), for
   the API changes between 6.7 and 6.12. Needed on OpenWrt 24.10 (kernel 6.6, cfg80211 6.12).
 - `050` raises the stack-frame warning limit for one debugfs function so 32-bit MIPS targets build.
 
-The first three are submitted upstream
-([#48](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/48),
-[#49](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/49),
-[#50](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/50)) and will be dropped here once merged.
+Three earlier patches are now upstream and no longer carried here: the nl80211 interface-add
+deadlock, `dump_station` in client and AP mode, and the cfg80211 6.17 signature detection
+([#51](https://github.com/Kiborgik/aic8800dc-linux-patched/pull/51), in 6.4.3.0-patched.20).
 
 ## Why not the ImmortalWrt `aic8800` package
 
